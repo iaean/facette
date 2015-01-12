@@ -1,49 +1,38 @@
-Facette [![](https://api.travis-ci.org/facette/facette.png)](https://travis-ci.org/facette/facette)
-=======
-
 ![logo](https://cloud.githubusercontent.com/assets/1122379/3501756/07726d40-061a-11e4-8ffa-bbaa6cf3adfb.png)
 
-What is Facette?
-----------------
+This is a fork of [Facette][0], to provide a [KairosDB][1] connector for it.
+C*/KairosDB is a fast scalable time series sink, but it seems to lack an
+user friendly ad-hoc instant graphing capability. Hoping by providing a connector,
+facette can deal with this.
 
-[Facette][0] is a web application to display time series data from various sources — such as [collectd][1],
-[Graphite][2] or [InfluxDB][5] — on graphs, designed to be easy to setup and to use. To learn more on its architecture,
-read [this page](http://docs.facette.io/architecture/).
+### Status
+----------
 
-The source code is available at [Github][3], licensed under the terms of the [BSD license][4].
+still functional with KairosDB 0.9.4 (< 0.9.4 untested)...
 
-![facette_sshot2](https://cloud.githubusercontent.com/assets/1122379/3489453/3a61f74e-052e-11e4-884e-ea781b93efdd.png)
-![facette_sshot1](https://cloud.githubusercontent.com/assets/1122379/3489442/74b3b000-052d-11e4-812e-e462b8048ebd.png)
+...but there is sufficient scope for reviews and enhancements
 
-Installation
-------------
+### TODO / Review
+-----------------
 
-:warning: Facette is currently under development and is **not ready** for
-a production environment.
+* check against KairosDB version during init to avoid API malfunction
+* make the source tags list configurable  
+  hard coded to `{"host", "name"}` at the moment
+* make the interval for metrics population configurable  
+  hard coded to 3600sec (1h) from now at the moment
+* make metric aggregation function configurable by metric pattern  
+  hard coded to the "max" of each 5min at the moment  
+  each metric is aggregated at the moment, would be nice to graph raw data, too
+* (Review) remove code for source/metric pattern matching?  
+  KairosDB doesn't need it and the filter capability allows  
+  to skip/modify source/metric names
+* what's about different timezones between facette and the backend?
 
-Please see [INSTALL](INSTALL) file for build instructions and installation procedures.
+### Contribution
+-----------------
 
-Contribution
-------------
-
-We welcome all your contributions. So, don't hesitate to fork the project, make your changes and submit us your pull
-requests.
-
-However, as Facette is under development and still subject to heavy changes, please open an issue to discuss yours if
-you think that they will have quite an impact on the code base before starting contributing.
-
-To make the things easier, we will ask for the following:
-
- * Always use `go fmt`
- * Keep code lines length under 120 characters
- * Provide (when applicable) unit tests for the new code
- * Make sure to run `make test`, having the process completing successfully
- * Squash your commits into a single commit
+All your contributions are welcome.
 
 
-[0]: https://facette.io/
-[1]: https://collectd.org/
-[2]: http://graphite.readthedocs.org/
-[3]: https://github.com/facette/facette
-[4]: http://opensource.org/licenses/BSD-3-Clause
-[5]: https://influxdb.com/
+[0]: https://github.com/facette/facette
+[1]: https://github.com/kairosdb/kairosdb
