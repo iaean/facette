@@ -15,18 +15,13 @@ still functional with KairosDB 0.9.4 (< 0.9.4 untested)...
 ### TODO / Review
 -----------------
 
-* check against KairosDB version during init to avoid API malfunction
-* make the source tags list configurable  
-  hard coded to `{"host", "name"}` at the moment
-* make the interval for metrics population configurable  
-  hard coded to 3600sec (1h) from now at the moment
-* make metric aggregation function configurable by metric pattern  
-  hard coded to the "max" of each 5min at the moment  
-  each metric is aggregated at the moment, would be nice to graph raw data, too
-* (Review) remove code for source/metric pattern matching?  
-  KairosDB doesn't need it and the filter capability allows  
-  to skip/modify source/metric names
-* what's about different timezones between facette and the backend?
+* [x] check against KairosDB version during init  
+API is stable between 0.9.4 and upcoming 0.9.5  
+[see here](https://github.com/kairosdb/kairosdb/issues/141)
+* [x] make the source tags list configurable
+* [x] make the interval for metrics population configurable
+* [x] make metric aggregation function configurable by metric pattern
+* [ ] what's about different timezones between facette and the backend?
 
 ### Contribution
 -----------------
