@@ -8,7 +8,7 @@ TAGS ?= facette \
 	influxdb \
 	rrd
 
-PREFIX ?= /usr/local
+PREFIX ?= /opt/facette
 
 UNAME := $(shell uname -s)
 
