@@ -25,7 +25,7 @@
 
 					<fieldset>
 						<label for="graph">Graph</label>
-						<input data-input="graph" data-inputopts="sources: library/graphs/" id="graph" name="graph" type="text">
+						<input data-input="graph" data-inputopts="sources: library/graphs/?type=raw; autofill: false" id="graph" name="graph" type="text">
 
 						<button name="graph-add">Add</button>
 					</fieldset>
@@ -45,6 +45,9 @@
 									<label class="icon placeholder" for="graph-shown" title="Show/Hide Graph"></label>
 
 									<span class="name">Loading...</span>
+									<span class="actions">
+										<a class="icon icon-edit" href="#edit-graph" title="Edit Graph"></a>
+									</span>
 								</dt>
 								<dd class="toggle">
 									<a href="#show-options">Show Options</a>
@@ -64,7 +67,7 @@
 										<input name="graph-sample" placeholder="400" type="text">
 									</div>
 									<div>
-										<label>Constants:</label><span class="note">e.g. 123.21</span>
+										<label>Constants:</label><span class="note">e.g. 42, 123.21</span>
 										<input name="graph-constants" type="text">
 									</div>
 									<div>

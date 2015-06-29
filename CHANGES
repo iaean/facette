@@ -1,6 +1,52 @@
 CHANGES
 =======
 
+0.3.0 (2015-06-24)
+------------------
+
+ * Add natural sorting for API results
+ * Add nginx and apache2 examples in Debian package
+ * Add links to graph edition in collections setup
+ * Add collection tree state save support
+ * Improve rrd file data point handling
+ * Make graphs in collections enabled by default
+ * Fix issue with time range global spread
+ * Fix time range reset button behavior
+ * Fix max value issue when values are negative
+ * Fix event triggering browser compatibility issue
+ * Fix graph template field parsing issues
+ * Fix issue with URL prefix check in group listing API calls
+ * Fix duplicated metrics name when expanding source groups
+ * Fix state loss on graph automatic refresh
+ * Various bug fixes
+ * UI improvements
+
+0.3.0rc1 (2015-03-22)
+---------------------
+
+ * Add consolidation function choice support for operation groups
+ * Add global refresh interval/time range/legends togglers in browse UI
+ * Add graph templates support
+ * Add missing close calls on HTTP responses bodies in connectors
+ * Add new KairosDB connector
+ * Add SSL/TLS support for InfluxDB connector
+ * Add support of consolidation functions in RRD connector
+ * Add top-level collections retrieval in library API
+ * Add library items ID display in Administration Panel
+ * Improve filesystem walking times
+ * Improve HTTP routes handling
+ * Make collection entries title optional
+ * Move plots API URL away from library into a dedicated route
+ * Prevent loop when using Facette connectors relying on each others
+ * Update connectors example configurations
+ * Update thirdparty packages
+ * Fix crash when cloning collection
+ * Fix parsing issue when multiple percentiles are provided
+ * Fix plot lines z-index issue
+ * Fix quoted strings modifier syntax
+ * Various minor bug fixes
+ * UI improvements
+
 0.2.3 (2014-12-15)
 ------------------
 

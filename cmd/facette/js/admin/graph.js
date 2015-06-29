@@ -1,9 +1,32 @@
 
-function adminGraphGetData() {
-    var $pane = paneMatch('graph-edit'),
+function adminGraphGetData(link) {
+    var $pane,
+        data;
+
+    link = typeof link == 'boolean' ? link : false;
+
+    if (link) {
+        $pane = paneMatch('graph-link-edit');
+
+        // Create linked graph structure
+        data = {
+            name: $pane.find('input[name=graph-name]').val(),
+            link: $pane.find('input[name=graph]').data('value').id,
+            attributes: {}
+        };
+
+        $pane.find('.graphattrs [data-listitem]').each(function () {
+            var $item = $(this);
+            data.attributes[$item.find('.key :input').val()] = $item.find('.value :input').val();
+        });
+    } else {
+        $pane = paneMatch('graph-edit');
+
+        // Create standard graph structure
         data = {
             name: $pane.find('input[name=graph-name]').val(),
             description: $pane.find('textarea[name=graph-desc]').val(),
+            title: $pane.find('input[name=graph-title]').val(),
             type: parseInt($pane.find('select[name=graph-type]').val(), 10),
             stack_mode: parseInt($pane.find('select[name=stack-mode]').val(), 10),
             unit_legend: $pane.find('input[name=unit-legend]').val(),
@@ -11,12 +34,21 @@ function adminGraphGetData() {
             groups: adminGraphGetGroups()
         };
 
+        // Append graph arguments if template
+        if ($pane.data('template')) {
+            data.template = true;
+
+            // Set extra pane redirection parameters
+            $pane.data('redirect-params', 'templates=1');
+        }
+    }
+
     return data;
 }
 
 function adminGraphGetGroup(entry) {
     var group,
-        seriesValue;
+        value;
 
     if (entry.attr('data-group')) {
         group = $.extend({
@@ -29,16 +61,17 @@ function adminGraphGetGroup(entry) {
                 group.series.push(adminGraphGetValue($(this)));
             });
     } else {
-        seriesValue = adminGraphGetValue(entry);
+        value = $.extend({}, adminGraphGetValue(entry));
 
         group = {
-            name: seriesValue && seriesValue.name || entry.attr('data-series'),
+            name: value && value.name || entry.attr('data-series'),
             type: OPER_GROUP_TYPE_NONE,
             series: [],
-            options: {}
+            options: $.extend({}, value.options)
         };
 
-        group.series.push(seriesValue);
+        delete value.options;
+        group.series.push(value);
     }
 
     return group;
@@ -158,6 +191,12 @@ function adminGraphCreateGroup(name, value) {
 
         if (value.options.unit)
             $item.find('a[href=#set-unit]').text(value.options.unit);
+
+        $item.find('a[href=#set-consolidate]').text(adminGraphGetConsolidateLabel(value.options.consolidate ||
+            CONSOLIDATE_AVERAGE));
+
+        if (value.options.formatter)
+            $item.find('a[href=#set-formatter]').text(value.options.formatter);
     }
 
     return $item;
@@ -247,6 +286,12 @@ function adminGraphCreateProxy(type, item, list) {
 
         if (value.options.unit)
             $item.find('a[href=#set-unit]').text(value.options.unit);
+
+        $item.find('a[href=#set-consolidate]').text(adminGraphGetConsolidateLabel(value.options.consolidate ||
+            CONSOLIDATE_AVERAGE));
+
+        if (value.options.formatter)
+            $item.find('a[href=#set-formatter]').text(value.options.formatter);
     }
 
     return $item;
@@ -443,9 +488,98 @@ function adminGraphAutoNameSeries(force) {
     });
 }
 
+function adminGraphGetConsolidateLabel(type) {
+    switch (type) {
+        case CONSOLIDATE_AVERAGE:
+            return 'avg';
+        case CONSOLIDATE_LAST:
+            return 'last';
+        case CONSOLIDATE_MAX:
+            return 'max';
+        case CONSOLIDATE_MIN:
+            return 'min';
+        case CONSOLIDATE_SUM:
+            return 'sum';
+        default:
+            return '';
+    }
+}
+
+function adminGraphGetTemplatable(groups) {
+    var $pane = paneMatch('graph-edit'),
+        result = [],
+        regexp,
+        series,
+        i, j;
+
+    regexp = /\{\{\s*\.([a-z0-9]+)\s*\}\}/i;
+
+    for (i in groups) {
+        for (j in groups[i].series) {
+            series = groups[i].series[j];
+            result = result.concat((series.origin + '\x1e' + series.source + '\x1e' + series.metric).matchAll(regexp));
+        }
+    }
+
+    if ($pane.data('template')) {
+        result = result.concat($pane.find('textarea[name=graph-desc]').val().matchAll(regexp));
+        result = result.concat($pane.find('input[name=graph-title]').val().matchAll(regexp));
+    }
+
+    result.sort();
+
+    return arrayUnique(result);
+}
+
+function adminGraphUpdateAttrsList() {
+    var $pane = paneMatch('graph-edit'),
+        $listAttrs,
+        $item,
+        attrs,
+        attrsData,
+        i;
+
+    // Generate graph arguments list
+    $listAttrs = listMatch('step-3-attrs');
+
+    attrs = adminGraphGetTemplatable(adminGraphGetGroups());
+
+    if (attrs.length === 0) {
+        listSay($listAttrs, $.t('graph.mesg_no_template_attr'), 'warning');
+        $listAttrs.next('.mesgitem').hide();
+        return;
+    } else {
+        $listAttrs.next('.mesgitem').show();
+    }
+
+    listSay($listAttrs, null);
+    listEmpty($listAttrs);
+
+    attrsData = $pane.data('attrs-data') || {};
+
+    for (i in attrs) {
+        $item = listAppend($listAttrs);
+        $item.find('.key input').val(attrs[i]);
+
+        if (attrsData[attrs[i]] !== undefined)
+            $item.find('.value input').val(attrsData[attrs[i]]);
+    }
+}
+
 function adminGraphSetupTerminate() {
     // Register admin panes
     paneRegister('graph-list', function () {
+        listRegisterItemCallback('graphs', function (item, entry) {
+            if (!entry.link)
+                return;
+
+            item.data('params', 'linked=1');
+
+            item.find('.name')
+                .attr('title', $.t('graph.mesg_linked'))
+                .addClass('linked');
+        });
+
         adminItemHandlePaneList('graph');
     });
 
@@ -456,22 +590,36 @@ function adminGraphSetupTerminate() {
         // Register completes and checks
         if ($('[data-input=source]').length > 0) {
             inputRegisterComplete('source', function (input) {
-                return inputGetSources(input, {
-                    origin: input.closest('fieldset').find('input[name=origin]').val()
-                });
+                var $origin = input.closest('fieldset').find('input[name=origin]'),
+                    params = {},
+                    opts;
+
+                opts = $origin.closest('[data-input]').opts('input');
+                if (!opts.ignorepattern || $origin.val().indexOf(opts.ignorepattern) == -1)
+                    params.origin = $origin.val();
+
+                return inputGetSources(input, params);
             });
         }
 
         if ($('[data-input=metric]').length > 0) {
             inputRegisterComplete('metric', function (input) {
                 var $fieldset = input.closest('fieldset'),
-                    source = $fieldset.find('input[name=source]');
+                    $origin = $fieldset.find('input[name=origin]'),
+                    $source = $fieldset.find('input[name=source]'),
+                    params = {},
+                    opts;
 
-                return inputGetSources(input, {
-                    origin: $fieldset.find('input[name=origin]').val(),
-                    source: (source.data('value') && source.data('value').source.endsWith('groups/') ? 'group:' : '') +
-                        source.val()
-                });
+                opts = $origin.closest('[data-input]').opts('input');
+                if (!opts.ignorepattern || $origin.val().indexOf(opts.ignorepattern) == -1)
+                    params.origin = $origin.val();
+
+                opts = $source.closest('[data-input]').opts('input');
+                if (!opts.ignorepattern || $source.val().indexOf(opts.ignorepattern) == -1)
+                    params.source = ($source.data('value') && $source.data('value').source.endsWith('groups/') ?
+                        'group:' : '') + $source.val();
+
+                return inputGetSources(input, params);
             });
         }
 
@@ -544,12 +692,13 @@ function adminGraphSetupTerminate() {
                     $itemSrc = $(this),
                     value = $itemSrc.data('value');
 
+                $item = adminGraphCreateProxy(PROXY_TYPE_SERIES, $itemSrc, $listSeries);
+
                 if (value.source.startsWith('group:') || value.metric.startsWith('group:')) {
                     expandQuery.push([value.origin, value.source, value.metric]);
                     expand = true;
+                    $item.addClass('expandable');
                 }
-
-                $item = adminGraphCreateProxy(PROXY_TYPE_SERIES, $itemSrc, $listSeries);
 
                 if ($listOpers.find('[data-series="' + $itemSrc.attr('data-series') + '"]').length > 0)
                     $item.addClass('linked');
@@ -568,10 +717,19 @@ function adminGraphSetupTerminate() {
                     contentType: 'application/json',
                     data: JSON.stringify(expandQuery)
                 }).pipe(function (data) {
+                    if (!data)
+                        return;
+
                     listGetItems($listSeries).each(function (index) {
                         var $item = $(this);
 
-                        if (data[index]) {
+                        if (!$item.hasClass('expandable')) {
+                            $item.find('.count').remove();
+                            $item.find('a[href$=#expand-series], a[href$=#collapse-series]').remove();
+                            return;
+                        }
+
+                        if (data[index] && data[index].length > 0) {
                             $item.find('.count').text(data[index].length);
 
                             if (data[index].length > 1) {
@@ -606,6 +764,15 @@ function adminGraphSetupTerminate() {
                 selectUpdate($step.find('select[name=graph-unit]').get(0));
                 $step.find(':input:first').select();
             });
+
+            // Check for template
+            $pane.find('.tmplattrs').toggle($pane.data('template'));
+
+            if (!$pane.data('template'))
+                return;
+
+            // Generate graph arguments list
+            adminGraphUpdateAttrsList();
         });
 
         paneStepRegister('graph-edit', 'stack', function () {
@@ -777,6 +944,12 @@ function adminGraphSetupTerminate() {
 
                     if (expands[seriesName].options.unit !== 0)
                         $item.find('a[href=#set-unit]').text(expands[seriesName].options.unit);
+
+                    if (expands[seriesName].options.consolidate !== 0)
+                        $item.find('a[href=#set-consolidate]').text(expands[seriesName].options.consolidate);
+
+                    if (expands[seriesName].options.formatter !== 0)
+                        $item.find('a[href=#set-formatter]').text(expands[seriesName].options.formatter);
                 }
 
                 $item.find('.count').remove();
@@ -1149,6 +1322,90 @@ function adminGraphSetupTerminate() {
             });
         });
 
+        linkRegister('set-consolidate', function (e) {
+            var $target = $(e.target),
+                $item = $target.closest('[data-series], [data-group]'),
+                $input,
+                $overlay,
+                value = adminGraphGetValue($item),
+                consolidateValue = value.options && value.options.consolidate ?
+                    value.options.consolidate : CONSOLIDATE_AVERAGE;
+
+            $overlay = overlayCreate('select', {
+                message: $.t('graph.labl_consolidate'),
+                value: consolidateValue,
+                callbacks: {
+                    validate: function (data) {
+                        data = parseInt(data, 10);
+
+                        value.options = $.extend(value.options || {}, {
+                            consolidate: data
+                        });
+
+                        $item.find('a[href=#set-consolidate]').text(adminGraphGetConsolidateLabel(data));
+                    }
+                },
+                labels: {
+                    validate: {
+                        text: $.t('graph.labl_consolidate_set')
+                    }
+                },
+                reset: 0,
+                options: [
+                    [$.t('graph.labl_consolidate_average'), CONSOLIDATE_AVERAGE],
+                    [$.t('graph.labl_consolidate_last'), CONSOLIDATE_LAST],
+                    [$.t('graph.labl_consolidate_max'), CONSOLIDATE_MAX],
+                    [$.t('graph.labl_consolidate_min'), CONSOLIDATE_MIN],
+                    [$.t('graph.labl_consolidate_sum'), CONSOLIDATE_SUM],
+                ]
+            });
+
+            $overlay.find('button[name=reset]').hide();
+
+            $overlay.find('.select')
+               .addClass('full')
+               .find('.menu .menuitem:first').remove();
+
+            $input = $overlay.find('input[name=value]').hide();
+
+            $overlay.find('select')
+                .on('change', function (e) {
+                    if (e.target.value)
+                        $input.val(e.target.value);
+                })
+                .val(consolidateValue)
+                .trigger({
+                    type: 'change',
+                    _init: true
+                });
+        });
+
+        linkRegister('set-formatter', function (e) {
+            var $target = $(e.target),
+                $item = $target.closest('[data-series], [data-group]'),
+                $formatter = $item.find('a[href=#set-formatter]'),
+                value = adminGraphGetValue($item);
+
+            overlayCreate('prompt', {
+                message: $.t('graph.labl_formatter'),
+                callbacks: {
+                    validate: function (data) {
+                        value.options = $.extend(value.options || {}, {
+                            formatter: data
+                        });
+
+                        $formatter.text(data || '');
+                    }
+                },
+                labels: {
+                    validate: {
+                        text: $.t('graph.labl_formatter_set')
+                    }
+                },
+                reset: ''
+            });
+        });
+
         // Attach events
         $body
             .on('click', 'button', function (e) {
@@ -1161,6 +1418,10 @@ function adminGraphSetupTerminate() {
                     $origin,
                     name,
                     metricName;
+
+                // Find closest button for browsers triggering event from children element
+                if (e.target.tagName != 'BUTTON')
+                    e.target = $(e.target).closest('button').get(0);
 
                 switch (e.target.name) {
                 case 'auto-name':
@@ -1183,6 +1444,16 @@ function adminGraphSetupTerminate() {
                     $metric   = $fieldset.find('input[name=metric]');
                     $source   = $fieldset.find('input[name=source]');
                     $origin   = $fieldset.find('input[name=origin]');
+
+                    // Set template mode
+                    if ($origin.val().indexOf('{{') != -1 || $source.val().indexOf('{{') != -1 ||
+                        $metric.val().indexOf('{{') != -1) {
+                        $pane.data('template', true);
+                        $pane.find('button[name=step-save]').children().hide().filter('.template').show();
+                    } else if (e.target.name == 'metric-update' && listGetCount($list) == 1) {
+                        $pane.data('template', false);
+                        $pane.find('button[name=step-save]').children().hide().filter('.default').show();
+                    }
 
                     if (e.target.name == 'metric-update')
                         $entryActive = listGetItems($list, '.active');
@@ -1345,7 +1616,8 @@ function adminGraphSetupTerminate() {
                 }
             })
             .on('change', '[data-step=3] select, [data-step=3] input[type=radio]', function (e) {
-                var $target = $(e.target);
+                var $target = $(e.target),
+                    data;
 
                 if (e._init || !e._select && e.target.tagName == 'SELECT')
                     return;
@@ -1357,7 +1629,21 @@ function adminGraphSetupTerminate() {
                     paneGoto('graph-edit', 'stack', true);
                 }
 
-                graphDraw($target.closest('[data-step]').find('[data-graph]'), false, 0, adminGraphGetData());
+                data = adminGraphGetData();
+
+                if ($pane.data('template')) {
+                    data.attributes = {};
+
+                    $pane.find('.graphattrs [data-listitem]').each(function () {
+                        var $item = $(this);
+                        data.attributes[$item.find('.key :input').val()] = $item.find('.value :input').val();
+                    });
+
+                    // Save attributes data for pane-switch restoration
+                    $pane.data('attrs-data', data.attributes);
+                }
+
+                graphDraw($target.closest('[data-step]').find('[data-graph]'), false, 0, data);
             })
             .on('change', '[data-step=3] :input', function (e) {
                 if (e._init || !e._select)
@@ -1371,7 +1657,43 @@ function adminGraphSetupTerminate() {
                     .val('');
             })
             .on('keyup', '[data-step=1] fieldset input', adminHandleFieldType)
+            .on('keypress', '[data-step=3] :input[name=graph-desc], [data-step=3] :input[name=graph-title]',
+                function (e) {
+
+                var $target = $(e.target),
+                    $step = $target.closest('[data-step]');
+
+                if ($step.data('attrs-timeout')) {
+                    clearTimeout($step.data('attrs-timeout'));
+                    $step.removeData('attrs-timeout')
+                }
+
+                $step.data('attrs-timeout', setTimeout(adminGraphUpdateAttrsList, 500));
+            })
+            .on('keypress', '[data-step=3] .graphattrs :input', function (e) {
+                var $target,
+                    $attrs;
+
+                if (!$pane.data('template'))
+                    return;
+
+                $target = $(e.target);
+                $attrs = $target.closest('.graphattrs');
+
+                if ($attrs.data('timeout')) {
+                    clearTimeout($attrs.data('timeout'));
+                    $attrs.removeData('timeout');
+                }
+
+                // Trigger graph redraw
+                $attrs.data('timeout', setTimeout(function () {
+                    $pane.find('[data-step=3] select:first').trigger('change');
+                }, 1000));
+            })
             .on('dragstart dragend dragover dragleave drop', '.dragarea', adminGraphHandleSeriesDrag);
+
+        // Set default panel save button
+        $pane.find('button[name=step-save]').children().hide().filter('.default').show();
 
         // Load graph data
         if (graphId === null)
@@ -1408,6 +1730,15 @@ function adminGraphSetupTerminate() {
                     if (data.groups[i].type === OPER_GROUP_TYPE_NONE && !data.groups[i].series[j].options)
                         data.groups[i].series[j].options = data.groups[i].options;
 
+
+                    if (data.groups[i].series[j].origin.indexOf('{{') != -1 ||
+                        data.groups[i].series[j].source.indexOf('{{') != -1 ||
+                        data.groups[i].series[j].metric.indexOf('{{') != -1) {
+                        $pane.data('template', true);
+                    } else {
+                        $pane.data('template', false);
+                    }
+
                     $itemSeries = adminGraphCreateSeries(null, data.groups[i].series[j])
                         .data('renamed', true);
 
@@ -1421,8 +1752,13 @@ function adminGraphSetupTerminate() {
                     adminGraphCreateProxy(PROXY_TYPE_GROUP, $itemOper, stacks[data.groups[i].stack_id]);
             }
 
+            if ($pane.data('template'))
+                $pane.find('button[name=step-save]').children().hide().filter('.template').show();
+
             $pane.find('input[name=graph-name]').val(data.name);
             $pane.find('textarea[name=graph-desc]').val(data.description);
+
+            $pane.find('input[name=graph-title]').val(data.title);
 
             $pane.find('select[name=graph-type]').val(data.type).trigger({
                 type: 'change',
@@ -1444,6 +1780,176 @@ function adminGraphSetupTerminate() {
                 listSay($listSeries, $.t('graph.mesg_no_series'));
 
             listUpdateCount($listMetrics);
+        });
+    });
+
+    paneRegister('graph-link-edit', function () {
+        var $pane = paneMatch('graph-link-edit'),
+            graphId = $pane.opts('pane').id || null;
+
+        // Register checks
+        if ($('[data-input=graph-name]').length > 0) {
+            inputRegisterCheck('graph-name', function (input) {
+                var value = input.find(':input').val();
+
+                if (!value)
+                    return;
+
+                itemList({
+                    filter: value
+                }, 'graphs').pipe(function (data) {
+                    if (data.length > 0 && data[0].id != graphId) {
+                        input
+                            .attr('title', $.t('graph.mesg_exists'))
+                            .addClass('error');
+                    } else {
+                        input
+                            .removeAttr('title')
+                            .removeClass('error');
+                    }
+                });
+            });
+        }
+        // Register pane steps
+        paneStepRegister('graph-link-edit', 1, function () {
+            if (!graphId)
+                listSay('step-1-attrs', $.t('graph.mesg_no_template_selected'), 'info');
+
+            setTimeout(function () { $('[data-step=1] input').trigger('change').filter(':first').select(); }, 0);
+        });
+
+        // Attach events
+        $body
+            .on('click', 'button', function (e) {
+                var $graph,
+                    $list,
+                    $target = $(e.target);
+
+                switch (e.target.name) {
+                case 'graph-ok':
+                    if (e.target.disabled)
+                        return;
+
+                    $list = listMatch('step-1-attrs');
+                    $graph = $pane.find('input[name=graph]');
+
+                    $.ajax({
+                        url: urlPrefix + '/api/v1/library/graphs/' + $graph.data('value').id,
+                        type: 'GET',
+                        dataType: 'json'
+                    }).pipe(function (data) {
+                        var $item,
+                            attrs = adminGraphGetTemplatable(data.groups),
+                            attrsData = $pane.data('attrs-data'),
+                            i;
+
+                        // Restore field name if needed (useful for linked graph edition)
+                        if (!$graph.val())
+                            $graph.val(data.name);
+
+                        if (attrs.length === 0) {
+                            listSay($list, $.t('graph.mesg_no_template_attr'), 'error');
+                            $pane.find('button[name=step-save]').attr('disabled', 'disabled');
+                            return;
+                        } else {
+                            $pane.find('button[name=step-save]').removeAttr('disabled');
+                        }
+
+                        listSay($list, null);
+                        listEmpty($list);
+
+                        for (i in attrs) {
+                            $item = listAppend($list);
+                            $item.find('.key input').val(attrs[i]);
+
+                            if (attrsData && attrsData[attrs[i]] !== undefined)
+                                $item.find('.value input').val(attrsData[attrs[i]]);
+                        }
+
+                        // Trigger first graph preview
+                        listGetItems($list, ':first').find('.value input').trigger('keypress');
+
+                        if (e._init)
+                            return;
+
+                        listGetItems($list, ':first').find('.value input').focus();
+                    });
+
+                    PANE_UNLOAD_LOCK = true;
+
+                    break;
+
+                case 'step-cancel':
+                    window.location = urlPrefix + '/admin/graphs/';
+                    break;
+
+                case 'step-save':
+                    if (!$pane.find('input[name=graph]').data('value')) {
+                        overlayCreate('alert', {
+                            message: $.t('graph.mesg_missing_template'),
+                            callbacks: {
+                                validate: function () {
+                                    setTimeout(function () { $pane.find('[data-input=graph] input').select(); }, 0);
+                                }
+                            }
+                        });
+                        return false;
+                    }
+
+                    adminItemHandlePaneSave($target.closest('[data-pane]'), graphId, 'graph', function() {
+                        return adminGraphGetData(true);
+                    });
+
+                    break;
+                }
+            })
+            .on('change', '[data-step=1] [data-input=graph] input', function (e) {
+                var $target = $(e.target),
+                    $button = $target.closest('[data-input]').nextAll('button:first');
+
+                if (!$target.val())
+                    $button.attr('disabled', 'disabled');
+                else
+                    $button.removeAttr('disabled');
+
+                // Select button
+                if ($target.val())
+                    $button.focus();
+            })
+            .on('keypress', '[data-step=1] .graphattrs :input', function (e) {
+                var $target = $(e.target);
+
+                if ($target.data('timeout')) {
+                    clearTimeout($target.data('timeout'));
+                    $target.removeData('timeout');
+                }
+
+                $target.data('timeout', setTimeout(function () {
+                    graphDraw($target.closest('[data-step]').find('[data-graph]'), false, 0, adminGraphGetData(true));
+                }, 1000));
+            });
+
+        // Load graph data
+        if (graphId === null)
+            return;
+
+        itemLoad(graphId, 'graphs').pipe(function (data) {
+            var $graph;
+
+            $pane.find('input[name=graph-name]').val(data.name).select();
+
+            $pane.data('attrs-data', data.attributes);
+
+            $graph = $pane.find('input[name=graph]').data('value', {id: data.link});
+
+            $graph.closest('[data-input]').nextAll('button:first')
+                .removeAttr('disabled')
+                .trigger({
+                    type: 'click',
+                    _init: true
+                });
+
+            PANE_UNLOAD_LOCK = false;
         });
     });
 }

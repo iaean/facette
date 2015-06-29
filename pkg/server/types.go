@@ -6,6 +6,7 @@ import (
 	"github.com/facette/facette/pkg/connector"
 	"github.com/facette/facette/pkg/library"
 	"github.com/facette/facette/pkg/plot"
+	"github.com/facette/facette/thirdparty/github.com/facette/natsort"
 )
 
 // ExpandRequest represents an expand request structure in the server backend.
@@ -34,6 +35,7 @@ type PlotRequest struct {
 	Graph       *library.Graph `json:"graph"`
 	startTime   time.Time
 	endTime     time.Time
+	requestor   string
 }
 
 // OriginResponse represents an origin response structure in the server backend.
@@ -63,7 +65,7 @@ func (r StringListResponse) Len() int {
 }
 
 func (r StringListResponse) Less(i, j int) bool {
-	return r[i] < r[j]
+	return natsort.Compare(r[i], r[j])
 }
 
 func (r StringListResponse) Swap(i, j int) {
@@ -90,7 +92,7 @@ func (r ItemListResponse) Len() int {
 }
 
 func (r ItemListResponse) Less(i, j int) bool {
-	return r[i].Name < r[j].Name
+	return natsort.Compare(r[i].Name, r[j].Name)
 }
 
 func (r ItemListResponse) Swap(i, j int) {
@@ -117,7 +119,7 @@ func (r CollectionListResponse) Len() int {
 }
 
 func (r CollectionListResponse) Less(i, j int) bool {
-	return r[i].Name < r[j].Name
+	return natsort.Compare(r[i].Name, r[j].Name)
 }
 
 func (r CollectionListResponse) Swap(i, j int) {
@@ -125,6 +127,31 @@ func (r CollectionListResponse) Swap(i, j int) {
 }
 
 func (r CollectionListResponse) slice(i, j int) interface{} {
+	return r[i:j]
+}
+
+// GraphResponse represents a graph response structure in the server backend.
+type GraphResponse struct {
+	ItemResponse
+	Link string `json:"link,omitempty"`
+}
+
+// GraphListResponse represents a list of graphs response structure in the backend server.
+type GraphListResponse []*GraphResponse
+
+func (r GraphListResponse) Len() int {
+	return len(r)
+}
+
+func (r GraphListResponse) Less(i, j int) bool {
+	return natsort.Compare(r[i].Name, r[j].Name)
+}
+
+func (r GraphListResponse) Swap(i, j int) {
+	r[i], r[j] = r[j], r[i]
+}
+
+func (r GraphListResponse) slice(i, j int) interface{} {
 	return r[i:j]
 }
 
@@ -142,7 +169,7 @@ func (r ScaleValueListResponse) Len() int {
 }
 
 func (r ScaleValueListResponse) Less(i, j int) bool {
-	return r[i].Name < r[j].Name
+	return natsort.Compare(r[i].Name, r[j].Name)
 }
 
 func (r ScaleValueListResponse) Swap(i, j int) {
@@ -167,7 +194,7 @@ func (r UnitValueListResponse) Len() int {
 }
 
 func (r UnitValueListResponse) Less(i, j int) bool {
-	return r[i].Name < r[j].Name
+	return natsort.Compare(r[i].Name, r[j].Name)
 }
 
 func (r UnitValueListResponse) Swap(i, j int) {
@@ -185,6 +212,7 @@ type PlotResponse struct {
 	End         string            `json:"end"`
 	Name        string            `json:"name"`
 	Description string            `json:"description"`
+	Title       string            `json:"title"`
 	Type        int               `json:"type"`
 	StackMode   int               `json:"stack_mode"`
 	UnitType    int               `json:"unit_type"`
@@ -237,7 +265,8 @@ type providerQuery struct {
 }
 
 type providerQueryMap struct {
-	seriesName string
-	sourceName string
-	metricName string
+	seriesName      string
+	sourceName      string
+	metricName      string
+	fromSourceGroup bool
 }

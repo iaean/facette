@@ -15,6 +15,8 @@ import (
 )
 
 func (server *Server) serveGraph(writer http.ResponseWriter, request *http.Request) {
+	var graph *library.Graph
+
 	if request.Method != "GET" && request.Method != "HEAD" && server.Config.ReadOnly {
 		server.serveResponse(writer, serverResponse{mesgReadOnlyMode}, http.StatusForbidden)
 		return
@@ -60,15 +62,13 @@ func (server *Server) serveGraph(writer http.ResponseWriter, request *http.Reque
 		server.serveResponse(writer, item, http.StatusOK)
 
 	case "POST", "PUT":
-		var graph *library.Graph
-
 		if response, status := server.parseStoreRequest(writer, request, graphID); status != http.StatusOK {
 			server.serveResponse(writer, response, status)
 			return
 		}
 
+		// Inheritance requested: clone an existing graph
 		if request.Method == "POST" && request.FormValue("inherit") != "" {
-			// Get graph from library
 			item, err := server.Library.GetItem(request.FormValue("inherit"), library.LibraryItemGraph)
 			if os.IsNotExist(err) {
 				server.serveResponse(writer, serverResponse{mesgResourceNotFound}, http.StatusNotFound)
@@ -90,8 +90,6 @@ func (server *Server) serveGraph(writer http.ResponseWriter, request *http.Reque
 			graph = &library.Graph{Item: library.Item{ID: graphID}}
 		}
 
-		graph.Modified = time.Now()
-
 		// Parse input JSON for graph data
 		body, _ := ioutil.ReadAll(request.Body)
 
@@ -101,6 +99,16 @@ func (server *Server) serveGraph(writer http.ResponseWriter, request *http.Reque
 			return
 		}
 
+		// Check for graph type consistency (either a graph or an instance but not both)
+		if !graph.Template && (graph.Link != "" || len(graph.Attributes) > 0) &&
+			(graph.Description != "" || graph.Title != "" || graph.Type != 0 || graph.StackMode != 0 ||
+				graph.UnitType != 0 || graph.UnitLegend != "" || graph.Groups != nil) ||
+			graph.Template && (graph.Link != "" || len(graph.Attributes) > 0) {
+			server.serveResponse(writer, serverResponse{mesgResourceInvalid}, http.StatusBadRequest)
+			return
+		}
+
+		// Store graph item
 		err := server.Library.StoreItem(graph, library.LibraryItemGraph)
 		if response, status := server.parseError(writer, request, err); status != http.StatusOK {
 			logger.Log(logger.LevelError, "server", "%s", err)
@@ -122,7 +130,7 @@ func (server *Server) serveGraph(writer http.ResponseWriter, request *http.Reque
 
 func (server *Server) serveGraphList(writer http.ResponseWriter, request *http.Request) {
 	var (
-		items         ItemListResponse
+		items         GraphListResponse
 		offset, limit int
 	)
 
@@ -153,9 +161,26 @@ func (server *Server) serveGraphList(writer http.ResponseWriter, request *http.R
 	}
 
 	// Fill graphs list
-	items = make(ItemListResponse, 0)
+	items = make(GraphListResponse, 0)
+
+	// Flag for listing only graph templates
+	listType := request.FormValue("type")
+	if listType == "" {
+		listType = "all"
+	} else if listType != "raw" && listType != "template" && listType != "all" {
+		logger.Log(logger.LevelWarning, "server", "unknown list type: %s", listType)
+		server.serveResponse(writer, serverResponse{mesgRequestInvalid}, http.StatusBadRequest)
+		return
+	}
 
 	for _, graph := range server.Library.Graphs {
+		// Depending on the template flag, filter out either graphs or graph templates
+		if request.FormValue("type") != "all" && (graph.Template && listType == "raw" ||
+			!graph.Template && listType == "template") {
+			continue
+		}
+
+		// Filter out graphs that don't belong in the targeted collection
 		if !graphSet.IsEmpty() && !graphSet.Has(graph.ID) {
 			continue
 		}
@@ -164,11 +189,34 @@ func (server *Server) serveGraphList(writer http.ResponseWriter, request *http.R
 			continue
 		}
 
-		items = append(items, &ItemResponse{
-			ID:          graph.ID,
-			Name:        graph.Name,
-			Description: graph.Description,
-			Modified:    graph.Modified.Format(time.RFC3339),
+		// If linked graph, expand the templated description field
+		description := graph.Description
+
+		if graph.Link != "" {
+			item, err := server.Library.GetItem(graph.Link, library.LibraryItemGraph)
+
+			if err != nil {
+				logger.Log(logger.LevelError, "server", "graph template not found")
+			} else {
+				graphTemplate := item.(*library.Graph)
+
+				if description, err = expandStringTemplate(
+					graphTemplate.Description,
+					graph.Attributes,
+				); err != nil {
+					logger.Log(logger.LevelError, "server", "failed to expand graph description: %s", err)
+				}
+			}
+		}
+
+		items = append(items, &GraphResponse{
+			ItemResponse: ItemResponse{
+				ID:          graph.ID,
+				Name:        graph.Name,
+				Description: description,
+				Modified:    graph.Modified.Format(time.RFC3339),
+			},
+			Link: graph.Link,
 		})
 	}
 

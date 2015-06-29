@@ -10,6 +10,7 @@
 		<script src="{{ .URLPrefix }}{{ asset "/static/rgbcolor.js" }}"></script>
 		<script src="{{ .URLPrefix }}{{ asset "/static/canvg.js" }}"></script>
 		<script src="{{ .URLPrefix }}{{ asset "/static/moment.js" }}"></script>
+		<script src="{{ .URLPrefix }}{{ asset "/static/sprintf.js" }}"></script>
 		<script src="{{ .URLPrefix }}{{ asset "/static/facette.js" }}"></script>
 {{ end }}
 
@@ -22,19 +23,39 @@
 			</dl>
 		</nav>
 
-		<article data-pane="graph-show" data-paneopts="id: {{ .Graph.ID }}">
+		<article data-pane="graph-show" data-paneopts="id: {{ .Graph.ID }}{{ if ne .Graph.Link "" }}; linked: true{{ end }}">
 			<header>
 				<h1>{{ .Graph.Name }}</h1>
 
 				<nav>
-					<ul>
+					<ul>{{ if not .ReadOnly }}
+						<li><a class="icon icon-edit" href="#edit-graph" title="Edit Graph"></a></li>{{ end }}
+						<li>
+							<a class="icon icon-time" href="#set-global-range" title="Set Time Range"></a>
+							<div class="menu">
+								<div class="menucntr">
+									<div class="menuitem"><a href="#range-1h">1h</a></div>
+									<div class="menuitem"><a href="#range-3h">3h</a></div>
+									<div class="menuitem"><a href="#range-1d">1d</a></div>
+									<div class="menuitem"><a href="#range-7d">7d</a></div>
+									<div class="menuitem"><a href="#range-1mo">1mo</a></div>
+									<div class="menuitem"><a href="#range-1y">1y</a></div>
+									<div class="menuitem"><a href="#range-custom">Custom…</a></div>
+								</div>
+							</div>
+						</li>
+						<li><a class="icon icon-refresh" href="#set-global-refresh" title="Set Refresh Interval"></a></li>
 						<li><a class="icon icon-print" href="#print" title="Print Page"></a></li>
 					</ul>
 				</nav>
+
+				<div class="right">
+					<a class="icon icon-toggle-off" href="#toggle-legends"> Toggle Legend</a>
+				</div>
 			</header>
 
 			<section class="scrollarea full">{{ template "template_graph" }}
-				<div data-graph="{{ .Graph.ID }}" data-graphopts="title: {{ .Graph.Name }}" id="graph-0"></div>
+				<div data-graph="{{ .Graph.ID }}"{{ if ne .Graph.Link "" }} data-graphopts="linked: true"{{ end }} id="graph-0"></div>
 			</section>
 		</article>
 {{ end }}

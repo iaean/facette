@@ -1,6 +1,21 @@
 
 /* Utils */
 
+function arrayUnique(array) {
+    var result = [],
+        length = array.length,
+        i;
+
+    for (i = 0; i < length; i++) {
+        if (result.indexOf(array[i]) != -1)
+            continue;
+
+        result.push(array[i]);
+    }
+
+    return result;
+}
+
 function domFillItem(item, data, formatters) {
     var key;
 
@@ -14,33 +29,31 @@ function domFillItem(item, data, formatters) {
     }
 }
 
-function formatValue(value, type, unit) {
+function formatValue(value, opts) {
     var result;
 
-    switch (type) {
+    opts = opts || {};
+
+    switch (opts.unit_type) {
     case UNIT_TYPE_FIXED:
-        result = Math.round(value * 100) / 100;
+        result = sprintf(opts.formatter || '%.2f', value);
         break;
 
     case UNIT_TYPE_METRIC:
-        result = humanReadable(value);
+        result = humanReadable(value, opts.formatter);
         break;
 
     default:
         result = value;
     }
 
-    if (unit) {
-        if (result == '0')
-            result += ' ';
-
-        result += unit;
-    }
+    if (opts.unit)
+        result += ' ' + opts.unit;
 
     return result;
 }
 
-function humanReadable(number) {
+function humanReadable(number, formatter) {
     var units = ['', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'],
         index;
 
@@ -48,7 +61,11 @@ function humanReadable(number) {
         return '0';
 
     index = parseInt(Math.log(Math.abs(number)) / Math.log(1000), 10);
-    return (Math.round((number / Math.pow(1000, index) * 100)) / 100) + (index > 0 ? ' ' + units[index] : '');
+    return sprintf(formatter || '%.2f', number / Math.pow(1000, index)) + (index > 0 ? ' ' + units[index] : '');
+}
+
+function parseFloatList(string) {
+    return $.map(string.split(','), function (x) { return parseFloat(x.trim()); })
 }
 
 function rgbToHex(value) {
@@ -119,4 +136,27 @@ function timeToRange(duration) {
         result = '-' + result;
 
     return result;
+}
+
+function getHighchartsSymbol(symbolText) {
+	var symbol;
+	switch (symbolText) {
+	    case 'circle':
+		symbol = '●';
+		break;
+	    case 'diamond':
+		symbol = '♦';
+		break;
+	    case 'square':
+		symbol = '■';
+		break;
+	    case 'triangle':
+		symbol = '▲';
+		break;
+	    case 'triangle-down':
+		symbol = '▼';
+		break;
+	}
+	return symbol
+
 }

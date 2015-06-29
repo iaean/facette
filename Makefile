@@ -1,6 +1,8 @@
 # -*- Makefile -*-
 
-VERSION = 0.3.0dev
+VERSION := 0.4.0dev
+
+BUILD_DATE := $(shell date +%F)
 
 TAGS ?= facette \
 	graphite \
@@ -55,8 +57,9 @@ JSHINT_ARGS =
 NPM_JSHINT = jshint
 
 LESSC ?= lessc
-LESSC_ARGS = --no-color
+LESSC_ARGS = --no-color --clean-css
 NPM_LESSC = less
+NPM_LESSC_PLUGIN_CLEANCSS = less-plugin-clean-css
 
 all: build
 
@@ -64,6 +67,7 @@ all: build
 lessc:
 	@if [ -z "$(call path_search,$(LESSC))" ]; then \
 		$(call npm_install,$(NPM_LESSC)); \
+		$(call npm_install,$(NPM_LESSC_PLUGIN_CLEANCSS)); \
 	fi
 
 uglifyjs:
@@ -108,10 +112,17 @@ BIN_OUTPUT = $(addprefix $(BUILD_DIR)/bin/, $(notdir $(wildcard cmd/*)))
 
 PKG_SRC = $(wildcard pkg/*/*.go)
 
+PKG_LIST = $(wildcard pkg/*)
+
 $(BIN_OUTPUT): $(PKG_SRC) $(BIN_SRC) $(BUILD_DIR)/src/github.com/facette/facette
 	@$(call mesg_start,$(notdir $@),Building $(notdir $@)...)
 	@install -d -m 0755 $(dir $@) && $(GO) build \
-			-ldflags "-X main.version $(VERSION)" \
+			-ldflags " \
+				-X main.version $(VERSION) \
+				-X main.buildDate '$(BUILD_DATE)' \
+				$(PKG_LIST:%=-X github.com/facette/facette/%.version $(VERSION)) \
+				$(PKG_LIST:%=-X github.com/facette/facette/%.buildDate '$(BUILD_DATE)') \
+			" \
 			-tags "$(TAGS)" \
 			-o $@ cmd/$(notdir $@)/*.go && \
 		$(call mesg_ok) || $(call mesg_fail)
@@ -178,8 +189,8 @@ SCRIPT_SRC = cmd/facette/js/intro.js \
 	cmd/facette/js/admin/intro.js \
 	cmd/facette/js/admin/admin.js \
 	cmd/facette/js/admin/item.js \
-	cmd/facette/js/admin/graph.js \
 	cmd/facette/js/admin/collection.js \
+	cmd/facette/js/admin/graph.js \
 	cmd/facette/js/admin/group.js \
 	cmd/facette/js/admin/scale.js \
 	cmd/facette/js/admin/unit.js \
@@ -188,6 +199,7 @@ SCRIPT_SRC = cmd/facette/js/intro.js \
 	cmd/facette/js/browse/intro.js \
 	cmd/facette/js/browse/browse.js \
 	cmd/facette/js/browse/collection.js \
+	cmd/facette/js/browse/graph.js \
 	cmd/facette/js/browse/outro.js \
 	cmd/facette/js/item.js \
 	cmd/facette/js/graph.js \
@@ -204,7 +216,8 @@ SCRIPT_EXTRA = cmd/facette/js/thirdparty/jquery.js \
 	cmd/facette/js/thirdparty/i18next.js \
 	cmd/facette/js/thirdparty/moment.js \
 	cmd/facette/js/thirdparty/canvg.js \
-	cmd/facette/js/thirdparty/rgbcolor.js
+	cmd/facette/js/thirdparty/rgbcolor.js \
+	cmd/facette/js/thirdparty/sprintf.js
 
 SCRIPT_EXTRA_OUTPUT = $(addprefix $(BUILD_DIR)/static/, $(notdir $(SCRIPT_EXTRA)))
 
@@ -272,7 +285,7 @@ $(STYLE_OUTPUT): lessc $(STYLE_SRC)
 	@install -d -m 0755 $(BUILD_DIR)/static && cat $(STYLE_SRC) >$(STYLE_OUTPUT:.css=.src.css) && \
 		$(call mesg_ok) || $(call mesg_fail)
 	@$(call mesg_start,static,Packing $(notdir $(STYLE_OUTPUT:.css=.src.css)) file...)
-	@$(LESSC) $(LESSC_ARGS) --compress $(STYLE_OUTPUT:.css=.src.css) >$(STYLE_OUTPUT) && \
+	@$(LESSC) $(LESSC_ARGS) $(STYLE_OUTPUT:.css=.src.css) >$(STYLE_OUTPUT) && \
 		$(call mesg_ok) || $(call mesg_fail)
 
 $(STYLE_PRINT_OUTPUT): lessc $(STYLE_PRINT_SRC)
@@ -280,7 +293,7 @@ $(STYLE_PRINT_OUTPUT): lessc $(STYLE_PRINT_SRC)
 	@install -d -m 0755 $(BUILD_DIR)/static && cat $(STYLE_PRINT_SRC) >$(STYLE_PRINT_OUTPUT:.css=.src.css) && \
 		$(call mesg_ok) || $(call mesg_fail)
 	@$(call mesg_start,static,Packing $(notdir $(STYLE_PRINT_OUTPUT:.css=.src.css)) file...)
-	@$(LESSC) $(LESSC_ARGS) --compress $(STYLE_PRINT_OUTPUT:.css=.src.css) >$(STYLE_PRINT_OUTPUT) && \
+	@$(LESSC) $(LESSC_ARGS) $(STYLE_PRINT_OUTPUT:.css=.src.css) >$(STYLE_PRINT_OUTPUT) && \
 		$(call mesg_ok) || $(call mesg_fail)
 
 $(STYLE_EXTRA_OUTPUT): $(STYLE_EXTRA)
@@ -335,12 +348,10 @@ lint-static: jshint $(SCRIPT_OUTPUT)
 # Test
 TEST_DIR = $(BUILD_DIR)/tests
 
-TEST_PKG = $(wildcard pkg/*)
-
 $(TEST_DIR):
 	@install -d -m 0755 $(TEST_DIR)
 
-$(TEST_PKG): $(TEST_DIR) $(BUILD_DIR)/src/github.com/facette/facette
+$(PKG_LIST): $(TEST_DIR) $(BUILD_DIR)/src/github.com/facette/facette
 	@$(call mesg_start,test,Testing $@ package...)
 	@(cd $(TEST_DIR) && $(GO) test -race -c -i ../../../$@ && \
 		(test ! -f ./$(@:pkg/%=%).test || ./$(@:pkg/%=%).test -test.v=true) && \
@@ -351,7 +362,7 @@ clean-test:
 	@rm -rf $(BUILD_DIR)/tests $(BUILD_DIR)/pkg && \
 		$(call mesg_ok) || $(call mesg_fail)
 
-test-pkg: $(TEST_PKG)
+test-pkg: $(PKG_LIST)
 
 test-server: $(TEST_DIR) build-bin
 	@$(call mesg_start,test,Starting facette server...)
@@ -359,7 +370,7 @@ test-server: $(TEST_DIR) build-bin
 		$(call mesg_ok) || $(call mesg_fail)
 
 	@$(call mesg_start,test,Running server tests...)
-	@(cd $(BUILD_DIR)/tests; $(GO) test -c -i ../../../cmd/facette) && \
+	@(cd $(BUILD_DIR)/tests; $(GO) test -race -c -i ../../../cmd/facette) && \
 		(cd $(BUILD_DIR)/; ./tests/facette.test -test.v=true -c ../../tests/facette.json) && \
 		$(call mesg_ok) || (kill -2 `cat $(BUILD_DIR)/tests/facette.pid`; $(call mesg_fail))
 

@@ -5,20 +5,30 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"runtime"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/facette/facette/pkg/catalog"
 	"github.com/facette/facette/pkg/config"
+	"github.com/facette/facette/pkg/connector"
 	"github.com/facette/facette/pkg/library"
 	"github.com/facette/facette/pkg/logger"
 	"github.com/facette/facette/pkg/provider"
 	"github.com/facette/facette/pkg/worker"
+	uuid "github.com/facette/facette/thirdparty/github.com/nu7hatch/gouuid"
+)
+
+var (
+	version   string
+	buildDate string
 )
 
 // Server is the main structure of the server handler.
 type Server struct {
+	ID              string
 	Config          *config.Config
 	Catalog         *catalog.Catalog
 	Library         *library.Library
@@ -32,6 +42,7 @@ type Server struct {
 	startTime       time.Time
 	stopping        bool
 	wg              *sync.WaitGroup
+	buildInfo       *buildInfo
 }
 
 // NewServer creates a new instance of server.
@@ -63,6 +74,20 @@ func (server *Server) Refresh() {
 // Run starts the server serving the HTTP responses.
 func (server *Server) Run() error {
 	server.startTime = time.Now()
+
+	// Set server build information
+	server.buildInfo = &buildInfo{
+		Version:    version,
+		BuildDate:  buildDate,
+		Compiler:   fmt.Sprintf("%s (%s)", runtime.Compiler, runtime.Version()),
+		Connectors: make([]string, 0),
+	}
+
+	for connector := range connector.Connectors {
+		server.buildInfo.Connectors = append(server.buildInfo.Connectors, connector)
+	}
+
+	sort.Strings(server.buildInfo.Connectors)
 
 	// Set up server logging
 	if server.logPath != "" && server.logPath != "-" {
@@ -101,6 +126,14 @@ func (server *Server) Run() error {
 	}
 
 	server.wg.Add(1)
+
+	// Generate unique server instance identifier
+	uuidTemp, err := uuid.NewV4()
+	if err != nil {
+		return err
+	}
+
+	server.ID = uuidTemp.String()
 
 	// Create new catalog instance
 	server.Catalog = catalog.NewCatalog()

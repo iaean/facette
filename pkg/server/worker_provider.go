@@ -24,6 +24,9 @@ func (server *Server) startProviderWorkers() error {
 			return fmt.Errorf("provider `%s' uses unknown connector type `%s'", prov.Name, connectorType)
 		}
 
+		// Append server identifier to provider configuration
+		prov.Config.Connector["_id"] = server.ID
+
 		providerWorker := worker.NewWorker()
 		providerWorker.RegisterEvent(eventInit, workerProviderInit)
 		providerWorker.RegisterEvent(eventShutdown, workerProviderShutdown)
@@ -112,6 +115,8 @@ func workerProviderRun(w *worker.Worker, args ...interface{}) {
 	for {
 		select {
 		case _ = <-timeChan:
+			logger.Log(logger.LevelDebug, "provider", "%s: performing refresh from connector", prov.Name)
+
 			if err := prov.Connector.Refresh(prov.Name, prov.Filters.Input); err != nil {
 				logger.Log(logger.LevelError, "provider", "%s: unable to refresh: %s", prov.Name, err)
 				continue

@@ -19,6 +19,31 @@ if (!String.prototype.endsWith) {
     };
 }
 
+if (!String.prototype.matchAll) {
+    String.prototype.matchAll = function (regexp) {
+        var matches = [],
+            match,
+            regexpStr,
+            index;
+
+        // Force RegExp global flag
+        if (!regexp.global) {
+            regexpStr = regexp.toString();
+            index = regexpStr.lastIndexOf('/');
+            regexp = new RegExp(regexpStr.substr(regexpStr.indexOf('/') + 1, index - 1), regexpStr.substr(index + 1) + 'g');
+        }
+
+        while ((match = regexp.exec(this))) {
+            if (match.length === 0)
+                continue;
+
+            matches.push(match[1]);
+        }
+
+        return matches;
+    };
+}
+
 /* Extend: jQuery */
 
 $.event.props.push('dataTransfer');
@@ -120,10 +145,10 @@ if (window.Highcharts) {
                 groupEvent(e);
             });
 
-            element = chart.renderer.rect(tableLeft, tableTop + i * GRAPH_LEGEND_ROW_HEIGHT, GRAPH_LEGEND_ROW_HEIGHT * 0.75,
-                    GRAPH_LEGEND_ROW_HEIGHT * 0.65, 2)
-                .attr({
-                    fill: series.color
+            element = chart.renderer.text(getHighchartsSymbol(series.symbol), tableLeft, tableTop +
+                    i * GRAPH_LEGEND_ROW_HEIGHT + GRAPH_LEGEND_ROW_HEIGHT / 2)
+                .css({
+                    'color': series.color,
                 })
                 .add(groups[series.name])
                 .element;
@@ -174,8 +199,10 @@ if (window.Highcharts) {
                 valueLeft = 0;
 
             $.each(chart.series, function (i, series) {
-                var value;
+                var value,
+                    elementOpts;
 
+                // Draw series summary item label
                 element = chart.renderer.text(key, keyLeft, tableTop + i * GRAPH_LEGEND_ROW_HEIGHT +
                         GRAPH_LEGEND_ROW_HEIGHT / 2)
                     .attr({
@@ -192,14 +219,21 @@ if (window.Highcharts) {
                     valueLeft = box.x + box.width + GRAPH_LEGEND_ROW_HEIGHT * 0.35;
                 }
 
+                // Get summary item value
                 value = data[series.name] && data[series.name].summary && data[series.name].summary[key] !== undefined ?
                     data[series.name].summary[key] : null;
 
-                element = chart.renderer.text(value !== null ? formatValue(value, options._opts.unit_type,
-                        data[series.name].options && data[series.name].options.unit || null) : 'null',
+                // Generate element options object
+                elementOpts = {unit_type: options._opts.unit_type};
+                if (data[series.name].options)
+                    elementOpts = $.extend(elementOpts, data[series.name].options);
+
+                // Render summary item value
+                element = chart.renderer.text(value !== null ? formatValue(value, elementOpts) : 'null',
                         valueLeft, tableTop + i * GRAPH_LEGEND_ROW_HEIGHT + GRAPH_LEGEND_ROW_HEIGHT / 2)
                     .attr({
                         'class': 'highcharts-table-value',
+                        'data-name': series.name + '-' + key,
                         'data-value': value
                     })
                     .css({
@@ -208,6 +242,7 @@ if (window.Highcharts) {
                     .add(groups[series.name])
                     .element;
 
+                // Add item event
                 Highcharts.addEvent(element, 'click', function (e) {
                     if (options.chart.events && options.chart.events.togglePlotLine)
                         options.chart.events.togglePlotLine.apply({
@@ -219,6 +254,7 @@ if (window.Highcharts) {
                         });
                 });
 
+                // Calculate future position boundaries
                 box = element.getBBox();
                 cellLeft = Math.max(cellLeft, box.x + box.width + GRAPH_LEGEND_ROW_HEIGHT);
             });
