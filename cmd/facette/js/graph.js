@@ -94,7 +94,7 @@ function graphDraw(graph, postpone, delay, preview) {
                     break;
 
                 case 'string':
-                    $.map(graphOpts.percentiles.split(','), function (x) { return parseFloat(x.trim()); });
+                    graphOpts.percentiles = parseFloatList(graphOpts.percentiles);
                     break;
                 }
             }
@@ -106,8 +106,7 @@ function graphDraw(graph, postpone, delay, preview) {
                     break;
 
                 case 'string':
-                    graphOpts.constants = $.map(graphOpts.constants.split(','),
-                        function (x) { return parseFloat(x.trim()); });
+                    graphOpts.constants = parseFloatList(graphOpts.constants);
                     break;
                 }
             }
@@ -145,18 +144,23 @@ function graphDraw(graph, postpone, delay, preview) {
                     startTime,
                     endTime,
                     seriesData = {},
+                    seriesVisibility = {},
+                    seriesPlotlines = [],
                     i,
                     j;
 
                 if (data.message || !data.series) {
                     graph.children('.graphctrl')
                         .attr('disabled', 'disabled')
-                        .find('a:not([href="#edit"], [href="#refresh"]), .legend')
+                        .find('a:not([href="#edit"], [href="#refresh"], [href="#reset"]), .legend')
                             .attr('disabled', 'disabled');
 
                     graph.find('.placeholder')
                         .addClass('icon icon-warning')
-                        .text(data.message ? data.message : $.t('graph.mesg_empty_series'));
+                        .text(data.message ? data.message : $.t('graph.mesg_empty_series'))
+                        .show();
+
+                    graph.children('.graphcntr').empty();
 
                     $deferred.resolve();
 
@@ -164,7 +168,7 @@ function graphDraw(graph, postpone, delay, preview) {
                 } else {
                     graph.children('.graphctrl')
                         .removeAttr('disabled')
-                        .find('a:not([href="#edit"], [href="#refresh"]), .legend')
+                        .find('a:not([href="#edit"], [href="#refresh"], [href="#reset"]), .legend')
                             .removeAttr('disabled');
 
                     graph.find('.placeholder')
@@ -225,7 +229,7 @@ function graphDraw(graph, postpone, delay, preview) {
                                     color: this.chart.options._data.plotlines[name],
                                     value: this.value,
                                     width: 1.5,
-                                    zIndex: 100
+                                    zIndex: 3
                                 });
                             }
                         },
@@ -264,6 +268,7 @@ function graphDraw(graph, postpone, delay, preview) {
                                     name: this.points[i].series.name,
                                     value: this.points[i].y,
                                     color: this.points[i].series.color,
+                                    symbol: getHighchartsSymbol(this.points[i].series.symbol)
                                 });
                             }
 
@@ -273,10 +278,10 @@ function graphDraw(graph, postpone, delay, preview) {
                                 total = 0;
 
                                 for (i in stacks[stackName]) {
-                                    tooltip += '<div><span class="highcharts-tooltip-color" style="background-color: ' +
-                                        stacks[stackName][i].color + '"></span> ' + stacks[stackName][i].name +
+                                    tooltip += '<div><span style="color: ' + stacks[stackName][i].color + '">' +
+                                        stacks[stackName][i].symbol +'</span> ' + stacks[stackName][i].name +
                                         ': <strong>' + (stacks[stackName][i].value !== null ?
-                                        formatValue(stacks[stackName][i].value, data.unit_type) : 'null') +
+                                        formatValue(stacks[stackName][i].value, {unit_type: data.unit_type}) : 'null') +
                                         '</strong></div>';
 
                                     if (stacks[stackName][i].value !== null)
@@ -285,7 +290,7 @@ function graphDraw(graph, postpone, delay, preview) {
 
                                 if (stacks[stackName].length > 1) {
                                     tooltip += '<div class="highcharts-tooltip-total">Total: <strong>' +
-                                        (total !== null ? formatValue(total, data.unit_type) : 'null') +
+                                        (total !== null ? formatValue(total, {unit_type: data.unit_type}) : 'null') +
                                         '</strong></div>';
                                 }
                             }
@@ -303,7 +308,7 @@ function graphDraw(graph, postpone, delay, preview) {
                     yAxis: {
                         labels: {
                             formatter: function () {
-                                return formatValue(this.value, data.unit_type);
+                                return formatValue(this.value, {unit_type: data.unit_type});
                             }
                         },
                         plotLines: [],
@@ -351,7 +356,7 @@ function graphDraw(graph, postpone, delay, preview) {
                     graph.children('.graphctrl').remove();
                 } else {
                     highchartOpts.title = {
-                        text: graphOpts.title || data.name
+                        text: data.title || data.name
                     };
 
                     highchartOpts.subtitle = {
@@ -393,6 +398,20 @@ function graphDraw(graph, postpone, delay, preview) {
                     break;
                 }
 
+                // Check for previous series visibility
+                $container = graph.children('.graphcntr');
+
+                highchart = $container.highcharts();
+                if (highchart) {
+                    $.each(highchart.series, function () {
+                        seriesVisibility[this.name] = this.visible;
+                    });
+                    $.each(highchart.yAxis[0].plotLinesAndBands, function () {
+                        seriesPlotlines.push(this.id);
+                    });
+                }
+
+                // Append series data
                 for (i in data.series) {
                     // Transform unix epochs to Date objects
                     for (j in data.series[i].plots)
@@ -403,7 +422,9 @@ function graphDraw(graph, postpone, delay, preview) {
                         name: data.series[i].name,
                         stack: 'stack' + data.series[i].stack_id,
                         data: data.series[i].plots,
-                        color: data.series[i].options ? data.series[i].options.color : null
+                        color: data.series[i].options ? data.series[i].options.color : null,
+                        visible: typeof seriesVisibility[data.series[i].name] !== undefined ?
+                            seriesVisibility[data.series[i].name] : true
                     });
 
                     seriesData[data.series[i].name] = {
@@ -413,8 +434,6 @@ function graphDraw(graph, postpone, delay, preview) {
                 }
 
                 // Prepare legend spacing
-                $container = graph.children('.graphcntr');
-
                 if (graphOpts.legend) {
                     highchartOpts.chart.spacingBottom = highchartOpts.series.length * GRAPH_LEGEND_ROW_HEIGHT +
                         highchartOpts.chart.spacingBottom;
@@ -444,7 +463,17 @@ function graphDraw(graph, postpone, delay, preview) {
                         color: '#d00',
                         value: graphOpts.constants[i],
                         width: 1,
-                        zIndex: 100
+                        zIndex: 3
+                    });
+                }
+
+                // Re-apply plotlines if any
+                if (seriesPlotlines.length > 0) {
+                    $.each(seriesPlotlines, function(i, name) {
+                        if (name.startsWith('plotline-'))
+                            name = name.substr(9);
+
+                        graph.find('.graphcntr .highcharts-table-value[data-name="' + name + '"]').trigger('click');
                     });
                 }
 
@@ -459,7 +488,7 @@ function graphDraw(graph, postpone, delay, preview) {
             }).fail(function () {
                 graph.children('.graphctrl')
                     .attr('disabled', 'disabled')
-                    .find('a:not([href="#edit"], [href="#refresh"]), .legend')
+                    .find('a:not([href="#edit"], [href="#refresh"], [href="#reset"]), .legend')
                         .attr('disabled', 'disabled');
 
                 graph.find('.placeholder')
@@ -514,6 +543,7 @@ function graphHandleActions(e) {
         $overlay,
         graphObj,
         delta,
+        location,
         options,
         range;
 
@@ -523,8 +553,14 @@ function graphHandleActions(e) {
     }
 
     if (e.target.href.endsWith('#edit')) {
+        options = $graph.data('options');
+
         // Go to Administration Panel
-        window.location = urlPrefix + '/admin/graphs/' + $(e.target).closest('[data-graph]').attr('data-graph');
+        location = urlPrefix + '/admin/graphs/' + $(e.target).closest('[data-graph]').attr('data-graph');
+        if (options.linked === true)
+            location += '?linked=1';
+
+        window.location = location;
     } else if (e.target.href.endsWith('#reframe-all')) {
         // Apply current options to siblings
         $graph.siblings('[data-graph]').each(function () {
@@ -544,8 +580,12 @@ function graphHandleActions(e) {
         // Refresh graph
         graphDraw($graph, false);
     } else if (e.target.href.endsWith('#reset')) {
-        // Reset graph to its initial state
-        $graph.data('options', null);
+        // Reset graph timerange
+        graphUpdateOptions($graph, {
+            time: null,
+            range: null
+        });
+
         graphDraw($graph);
     } else if (e.target.href.endsWith('#embed')) {
         window.open(urlPrefix + '/show/graphs/' + $(e.target).closest('[data-graph]').attr('data-graph'));

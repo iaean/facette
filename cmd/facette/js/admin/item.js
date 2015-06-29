@@ -3,14 +3,37 @@ function adminItemHandlePaneList(itemType) {
     var paneSection = paneMatch(itemType + '-list').opts('pane').section;
 
     // Register links
+    linkRegister('show-info', function (e) {
+        var $target = $(e.target),
+            $item = $target.closest('[data-listitem]'),
+            $tooltip;
+
+        $tooltip = tooltipCreate('info', function (state) {
+            $target.toggleClass('active', state);
+            $item.toggleClass('action', state);
+        }).appendTo($body)
+            .css({
+                top: $target.offset().top,
+                left: $target.offset().left
+            });
+
+        $tooltip.html('<span class="label">id:</span> ' + $item.attr('data-itemid'));
+    });
+
     linkRegister('show-' + itemType, function (e) {
         window.location = urlPrefix + '/browse/' + paneSection + '/' +
             $(e.target).closest('[data-itemid]').attr('data-itemid');
     });
 
     linkRegister('edit-' + itemType, function (e) {
-        window.location = urlPrefix + '/admin/' + paneSection + '/' +
-            $(e.target).closest('[data-itemid]').attr('data-itemid');
+        var $item = $(e.target).closest('[data-itemid]'),
+            location;
+
+        location = urlPrefix + '/admin/' + paneSection + '/' + $item.attr('data-itemid');
+        if ($item.data('params'))
+            location += '?' + $item.data('params');
+
+        window.location = location;
     });
 
     linkRegister('clone-' + itemType, function (e) {
@@ -27,9 +50,10 @@ function adminItemHandlePaneList(itemType) {
                     itemSave($item.attr('data-itemid'), paneSection, {
                         name: data
                     }, true).then(function () {
-                        listUpdate($item.closest('[data-list]'),
-                            $item.closest('[data-pane]')
-                                .find('[data-listfilter=' + paneSection + ']').val());
+                        listUpdate(
+                            $item.closest('[data-list]'),
+                            $item.closest('[data-pane]').find('[data-listfilter=' + paneSection + ']').val()
+                        );
                     });
                 }
             },
@@ -71,29 +95,26 @@ function adminItemHandlePaneList(itemType) {
 }
 
 function adminItemHandlePaneSave(pane, itemId, itemType, callback) {
-    var paneSection = paneMatch(itemType + '-edit').opts('pane').section,
-        skip = false;
+    var $item,
+        paneSection = pane.opts('pane').section,
+        paneParams = pane.data('redirect-params');
 
-    pane.find('input[name=' + itemType + '-name]').each(function () {
-        var $item = $(this);
+    $item = pane.find('input[name=' + itemType + '-name]');
 
-        if (!$item.val()) {
-            $item.closest('[data-input], textarea')
-                .attr('title', $.t('main.mesg_field_mandatory'))
-                .addClass('error');
+    if (!$item.val()) {
+        $item.closest('[data-input], textarea')
+            .attr('title', $.t('main.mesg_field_mandatory'))
+            .addClass('error');
 
-            skip = true;
-        }
-    });
+        $item.focus();
 
-    if (skip) {
         return;
     }
 
     itemSave(itemId, paneSection, callback(), null)
         .then(function () {
             PANE_UNLOAD_LOCK = false;
-            window.location = urlPrefix + '/admin/' + paneSection + '/';
+            window.location = urlPrefix + '/admin/' + paneSection + '/' + (paneParams ? '?' + paneParams : '');
         })
         .fail(function () {
             overlayCreate('alert', {

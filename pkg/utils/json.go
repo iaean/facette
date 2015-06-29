@@ -18,9 +18,16 @@ func JSONDump(filePath string, data interface{}, modTime time.Time) error {
 	}
 
 	dirPath, _ := path.Split(filePath)
-	os.MkdirAll(dirPath, 0755)
 
-	fd, _ := os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	err = os.MkdirAll(dirPath, 0755)
+	if err != nil {
+		return err
+	}
+
+	fd, err := os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
 	defer fd.Close()
 
 	fd.Write(output)
@@ -33,14 +40,7 @@ func JSONDump(filePath string, data interface{}, modTime time.Time) error {
 
 // JSONLoad loads the JSON formatted data in result from the filesystem.
 func JSONLoad(filePath string, result interface{}) (os.FileInfo, error) {
-	if _, err := os.Stat(filePath); err != nil {
-		return nil, err
-	}
-
 	// Load JSON data from file
-	fd, _ := os.OpenFile(filePath, os.O_RDONLY, 0644)
-	defer fd.Close()
-
 	data, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		return nil, err

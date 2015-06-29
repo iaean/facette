@@ -110,6 +110,7 @@ func (server *Server) serveAdminGraph(writer http.ResponseWriter, request *http.
 	data := struct {
 		URLPrefix           string
 		ReadOnly            bool
+		Template            bool
 		Section             string
 		Path                string
 		GraphTypeArea       int
@@ -124,10 +125,18 @@ func (server *Server) serveAdminGraph(writer http.ResponseWriter, request *http.
 		ReadOnly:  server.Config.ReadOnly,
 	}
 
+	if request.FormValue("templates") != "" {
+		data.Template = true
+	}
+
 	data.Section, data.Path = splitAdminURLPath(request.URL.Path)
 
 	if data.Path != "" && (data.Path == "add" || server.Library.ItemExists(data.Path, library.LibraryItemGraph)) {
-		tmplFile = "graph_edit.html"
+		if request.FormValue("linked") != "" {
+			tmplFile = "graph_edit_linked.html"
+		} else {
+			tmplFile = "graph_edit.html"
+		}
 
 		data.GraphTypeArea = library.GraphTypeArea
 		data.GraphTypeLine = library.GraphTypeLine
@@ -289,15 +298,19 @@ func (server *Server) serveAdminIndex(writer http.ResponseWriter, request *http.
 		writer,
 		http.StatusOK,
 		struct {
-			URLPrefix string
-			ReadOnly  bool
-			Section   string
-			Stats     *statsResponse
+			URLPrefix        string
+			ReadOnly         bool
+			HideBuildDetails bool
+			Section          string
+			Build            *buildInfo
+			Stats            *statsResponse
 		}{
-			URLPrefix: server.Config.URLPrefix,
-			ReadOnly:  server.Config.ReadOnly,
-			Section:   "",
-			Stats:     server.getStats(writer, request),
+			URLPrefix:        server.Config.URLPrefix,
+			ReadOnly:         server.Config.ReadOnly,
+			HideBuildDetails: server.Config.HideBuildDetails,
+			Section:          "",
+			Build:            server.buildInfo,
+			Stats:            server.getStats(writer, request),
 		},
 		path.Join(server.Config.BaseDir, "template", "layout.html"),
 		path.Join(server.Config.BaseDir, "template", "common", "element.html"),

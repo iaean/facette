@@ -32,6 +32,13 @@ func (server *Server) servePlots(writer http.ResponseWriter, request *http.Reque
 		return
 	}
 
+	// Check for requests loop
+	if request.Header.Get("X-Facette-Requestor") == server.ID {
+		logger.Log(logger.LevelWarning, "server", "request loop detected, cancelled")
+		server.serveResponse(writer, serverResponse{mesgEmptyData}, http.StatusBadRequest)
+		return
+	}
+
 	// Parse plots request
 	plotReq, err := parsePlotRequest(request)
 	if err != nil {
@@ -45,8 +52,9 @@ func (server *Server) servePlots(writer http.ResponseWriter, request *http.Reque
 
 	// If a Graph ID has been provided in the plot request, fetch the graph definition from the library instead
 	if plotReq.ID != "" {
+		graph = &library.Graph{}
 		if item, err = server.Library.GetItem(plotReq.ID, library.LibraryItemGraph); err == nil {
-			graph = item.(*library.Graph)
+			utils.Clone(item.(*library.Graph), graph)
 		}
 	}
 
@@ -64,6 +72,25 @@ func (server *Server) servePlots(writer http.ResponseWriter, request *http.Reque
 		}
 
 		return
+	}
+
+	// If linked graph, expand its template
+	if graph.Link != "" || graph.ID == "" && len(graph.Attributes) > 0 {
+		if graph.Link != "" {
+			// Get graph template from library
+			item, err := server.Library.GetItem(graph.Link, library.LibraryItemGraph)
+			if err != nil {
+				logger.Log(logger.LevelError, "server", "graph template not found: %s", graph.Link)
+				return
+			}
+
+			utils.Clone(item.(*library.Graph), graph)
+		}
+
+		if err = server.expandGraphTemplate(graph); err != nil {
+			logger.Log(logger.LevelError, "server", "unable to apply graph template: %s", err)
+			server.serveResponse(writer, serverResponse{mesgUnhandledError}, http.StatusInternalServerError)
+		}
 	}
 
 	// Prepare queries to be executed by the providers
@@ -99,6 +126,32 @@ func (server *Server) servePlots(writer http.ResponseWriter, request *http.Reque
 	}
 
 	server.serveResponse(writer, response, http.StatusOK)
+}
+
+func (server *Server) expandGraphTemplate(graph *library.Graph) error {
+	var err error
+
+	if graph.Title, err = expandStringTemplate(graph.Title, graph.Attributes); err != nil {
+		return fmt.Errorf("failed to expand graph title: %s", err)
+	}
+
+	for _, group := range graph.Groups {
+		for _, series := range group.Series {
+			if series.Name, err = expandStringTemplate(series.Name, graph.Attributes); err != nil {
+				return fmt.Errorf("failed to expand graph series %q name: %s", series.Name, err)
+			}
+
+			if series.Source, err = expandStringTemplate(series.Source, graph.Attributes); err != nil {
+				return fmt.Errorf("failed to expand graph series %q source: %s", series.Name, err)
+			}
+
+			if series.Metric, err = expandStringTemplate(series.Metric, graph.Attributes); err != nil {
+				return fmt.Errorf("failed to expand graph series %q metric: %s", series.Name, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (server *Server) prepareProviderQueries(plotReq *PlotRequest,
@@ -152,6 +205,7 @@ func (server *Server) prepareProviderQueries(plotReq *PlotRequest,
 					if _, ok := providerQueries[providerName]; !ok {
 						providerQueries[providerName] = &providerQuery{
 							query: plot.Query{
+								Requestor: plotReq.requestor,
 								StartTime: plotReq.startTime,
 								EndTime:   plotReq.endTime,
 								Sample:    plotReq.Sample,
@@ -177,9 +231,10 @@ func (server *Server) prepareProviderQueries(plotReq *PlotRequest,
 					providerQueries[providerName].queryMap = append(
 						providerQueries[providerName].queryMap,
 						providerQueryMap{
-							seriesName: seriesItem.Name,
-							sourceName: metric.GetSource().Name,
-							metricName: metric.Name,
+							seriesName:      seriesItem.Name,
+							sourceName:      metric.GetSource().Name,
+							metricName:      metric.Name,
+							fromSourceGroup: strings.HasPrefix(seriesItem.Source, library.LibraryGroupPrefix),
 						},
 					)
 				}
@@ -222,6 +277,9 @@ func parsePlotRequest(request *http.Request) (*PlotRequest, error) {
 		plotReq.Sample = config.DefaultPlotSample
 	}
 
+	// Append plot requestor identifier
+	plotReq.requestor = request.Header.Get("X-Facette-Requestor")
+
 	return plotReq, nil
 }
 
@@ -238,7 +296,9 @@ func executeQueries(queries map[string]*providerQuery) (map[string][]plot.Series
 		// Re-arrange internal plot results according to original queries
 		for plotsIndex, plotsItem := range plots {
 			// Add metric name detail to series name is a source/metric group
-			if strings.HasPrefix(providerQuery.queryMap[plotsIndex].seriesName, library.LibraryGroupPrefix) {
+			if providerQuery.queryMap[plotsIndex].fromSourceGroup ||
+				strings.HasPrefix(providerQuery.queryMap[plotsIndex].seriesName, library.LibraryGroupPrefix) {
+
 				plotsItem.Name = fmt.Sprintf(
 					"%s (%s)",
 					providerQuery.queryMap[plotsIndex].sourceName,
@@ -271,6 +331,7 @@ func makePlotsResponse(plotSeries map[string][]plot.Series, plotReq *PlotRequest
 		End:         plotReq.endTime.Format(time.RFC3339),
 		Name:        graph.Name,
 		Description: graph.Description,
+		Title:       graph.Title,
 		Type:        graph.Type,
 		StackMode:   graph.StackMode,
 		UnitType:    graph.UnitType,
@@ -279,10 +340,13 @@ func makePlotsResponse(plotSeries map[string][]plot.Series, plotReq *PlotRequest
 	}
 
 	for _, groupItem := range graph.Groups {
-		var groupSeries []plot.Series
+		var (
+			groupConsolidate int
+			groupSeries      []plot.Series
+			err              error
+		)
 
 		seriesOptions := make(map[string]map[string]interface{})
-		seriesOptions[groupItem.Name] = groupItem.Options
 
 		for _, seriesItem := range groupItem.Series {
 			if _, ok := plotSeries[seriesItem.Name]; !ok {
@@ -290,12 +354,29 @@ func makePlotsResponse(plotSeries map[string][]plot.Series, plotReq *PlotRequest
 			}
 
 			for _, plotItem := range plotSeries[seriesItem.Name] {
+				var optionKey string
+
 				// Apply series scale if any
 				if scale, _ := config.GetFloat(seriesItem.Options, "scale", false); scale != 0 {
 					plotItem.Scale(plot.Value(scale))
 				}
 
-				seriesOptions[seriesItem.Name] = seriesItem.Options
+				// Merge options from group and series
+				if groupItem.Type == plot.OperTypeAverage || groupItem.Type == plot.OperTypeSum {
+					optionKey = groupItem.Name
+				} else {
+					optionKey = seriesItem.Name
+				}
+
+				seriesOptions[optionKey] = make(map[string]interface{})
+				for key, value := range groupItem.Options {
+					seriesOptions[optionKey][key] = value
+				}
+				if groupItem.Type != plot.OperTypeAverage && groupItem.Type != plot.OperTypeSum {
+					for key, value := range seriesItem.Options {
+						seriesOptions[optionKey][key] = value
+					}
+				}
 
 				groupSeries = append(groupSeries, plotItem)
 			}
@@ -306,12 +387,17 @@ func makePlotsResponse(plotSeries map[string][]plot.Series, plotReq *PlotRequest
 		}
 
 		// Normalize all series plots on the same time step
-		groupSeries, err := plot.Normalize(
+		groupConsolidate, err = config.GetInt(groupItem.Options, "consolidate", true)
+		if err != nil {
+			groupConsolidate = plot.ConsolidateAverage
+		}
+
+		groupSeries, err = plot.Normalize(
 			groupSeries,
 			plotReq.startTime,
 			plotReq.endTime,
 			plotReq.Sample,
-			plot.ConsolidateAverage,
+			groupConsolidate,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("unable to consolidate series: %s", err)

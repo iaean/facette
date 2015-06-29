@@ -12,7 +12,7 @@ Requirements
 
 Debian/Ubuntu:
 
-   apt-get install build-essential golang-go librrd-dev pkg-config npm pandoc
+   apt-get install build-essential golang-go librrd-dev pkg-config npm nodejs-legacy pandoc
 
 Mac OS X (with brew):
 
@@ -31,6 +31,11 @@ By default Facette will be built in the `build` directory and installed in the `
 installation directory set the `PREFIX` variable:
 
    sudo make PREFIX=/path/to/directory install
+
+Configuration
+-------------
+
+Once installed, follow the configuration steps described here: http://docs.facette.io/configuration/
 
 Additional Targets
 ------------------
