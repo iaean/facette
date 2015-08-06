@@ -8,7 +8,7 @@ facette can deal with this.
 ### Status
 ----------
 
-still functional with KairosDB 0.9.4 (< 0.9.4 untested)...
+still functional with KairosDB 0.9.4 (<> 0.9.4 untested)...
 
 ...but there is sufficient scope for reviews and enhancements
 
@@ -22,6 +22,9 @@ API is stable between 0.9.4 and upcoming 0.9.5
 * [x] make the interval for metrics population configurable
 * [x] make metric aggregation function configurable by metric pattern
 * [ ] what's about different timezones between facette and the backend?
+* [ ] provide Wiki for KairosDB modelling issues
+* [ ] is best performance retrieval used?
+* [ ] API improvement. Allow UUID from outside.
 
 ### Contribution
 -----------------
