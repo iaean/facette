@@ -1,7 +1,7 @@
 CHANGES
 =======
 
-0.3.0 (2015-06-24)
+0.3.0 (2015-07-07)
 ------------------
 
  * Add natural sorting for API results
@@ -10,6 +10,7 @@ CHANGES
  * Add collection tree state save support
  * Improve rrd file data point handling
  * Make graphs in collections enabled by default
+ * Update KairosDB API version check to support > 0.9.5
  * Fix issue with time range global spread
  * Fix time range reset button behavior
  * Fix max value issue when values are negative
@@ -18,6 +19,7 @@ CHANGES
  * Fix issue with URL prefix check in group listing API calls
  * Fix duplicated metrics name when expanding source groups
  * Fix state loss on graph automatic refresh
+ * Fix completion issue with single entries in metric and source groups
  * Various bug fixes
  * UI improvements
 
