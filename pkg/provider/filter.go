@@ -6,7 +6,7 @@ import (
 	"github.com/facette/facette/pkg/catalog"
 	"github.com/facette/facette/pkg/config"
 	"github.com/facette/facette/pkg/logger"
-	"github.com/facette/facette/thirdparty/github.com/fatih/set"
+	"github.com/fatih/set"
 )
 
 type filterChain struct {
@@ -59,6 +59,7 @@ func newFilterChain(filters []*config.ProviderFilterConfig, output chan *catalog
 			// Forward record if no rule defined
 			if len(chain.rules) == 0 {
 				chain.output <- record
+				continue
 			}
 
 			// Keep a copy of original names

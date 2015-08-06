@@ -6,7 +6,7 @@ import (
 	"github.com/facette/facette/pkg/connector"
 	"github.com/facette/facette/pkg/library"
 	"github.com/facette/facette/pkg/plot"
-	"github.com/facette/facette/thirdparty/github.com/facette/natsort"
+	"github.com/facette/natsort"
 )
 
 // ExpandRequest represents an expand request structure in the server backend.
@@ -133,7 +133,8 @@ func (r CollectionListResponse) slice(i, j int) interface{} {
 // GraphResponse represents a graph response structure in the server backend.
 type GraphResponse struct {
 	ItemResponse
-	Link string `json:"link,omitempty"`
+	Link     string `json:"link,omitempty"`
+	Template bool   `json:"template"`
 }
 
 // GraphListResponse represents a list of graphs response structure in the backend server.

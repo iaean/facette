@@ -11,7 +11,7 @@ import (
 	"github.com/facette/facette/pkg/library"
 	"github.com/facette/facette/pkg/logger"
 	"github.com/facette/facette/pkg/utils"
-	"github.com/facette/facette/thirdparty/github.com/fatih/set"
+	"github.com/fatih/set"
 )
 
 func (server *Server) serveGraph(writer http.ResponseWriter, request *http.Request) {
@@ -216,7 +216,8 @@ func (server *Server) serveGraphList(writer http.ResponseWriter, request *http.R
 				Description: description,
 				Modified:    graph.Modified.Format(time.RFC3339),
 			},
-			Link: graph.Link,
+			Link:     graph.Link,
+			Template: graph.Template,
 		})
 	}
 

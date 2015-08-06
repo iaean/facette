@@ -14,28 +14,16 @@ PREFIX ?= /opt/facette
 
 UNAME := $(shell uname -s)
 
+GO ?= go
+
 GOOS ?= $(shell $(GO) env GOOS)
 GOARCH ?= $(shell $(GO) env GOARCH)
 
 BUILD_NAME = facette-$(GOOS)-$(GOARCH)
 BUILD_DIR = build/$(BUILD_NAME)
 
-GOPATH = $(realpath $(BUILD_DIR))
+GOPATH = $(realpath $(BUILD_DIR)):$(realpath vendor)
 export GOPATH
-
-GO ?= go
-
-mesg_start = echo "$(shell tty -s && tput setaf 4)$(1):$(shell tty -s && tput sgr0) $(2)"
-mesg_step = echo "$(1)"
-mesg_ok = echo "result: $(shell tty -s && tput setaf 2)ok$(shell tty -s && tput sgr0)"
-mesg_fail = (echo "result: $(shell tty -s && tput setaf 1)fail$(shell tty -s && tput sgr0)" && false)
-
-path_search = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(PATH)))))
-
-npm_install = \
-	$(call mesg_start,main,Installing $(1) via npm...); \
-	$(NPM) install $(1) >/dev/null 2>&1 && \
-		$(call mesg_ok) || $(call mesg_fail)
 
 TAR ?= tar
 
@@ -60,6 +48,18 @@ LESSC ?= lessc
 LESSC_ARGS = --no-color --clean-css
 NPM_LESSC = less
 NPM_LESSC_PLUGIN_CLEANCSS = less-plugin-clean-css
+
+mesg_start = echo "$(shell tty -s && tput setaf 4)$(1):$(shell tty -s && tput sgr0) $(2)"
+mesg_step = echo "$(1)"
+mesg_ok = echo "result: $(shell tty -s && tput setaf 2)ok$(shell tty -s && tput sgr0)"
+mesg_fail = (echo "result: $(shell tty -s && tput setaf 1)fail$(shell tty -s && tput sgr0)" && false)
+
+path_search = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(PATH)))))
+
+npm_install = \
+	$(call mesg_start,main,Installing $(1) via npm...); \
+	$(NPM) install $(1) >/dev/null 2>&1 && \
+		$(call mesg_ok) || $(call mesg_fail)
 
 all: build
 
@@ -100,7 +100,7 @@ lint: lint-bin lint-static
 test: clean-test test-pkg test-server
 
 $(BUILD_DIR)/src/github.com/facette/facette:
-	@$(call mesg_start,main,Creating source symlink...)
+	@$(call mesg_start,main,Preparing source paths...)
 	@mkdir -p $(BUILD_DIR)/src/github.com/facette && \
 		ln -s ../../../../.. $(BUILD_DIR)/src/github.com/facette/facette && \
 		$(call mesg_ok) || $(call mesg_fail)
