@@ -299,9 +299,12 @@ func (library *Library) StoreItem(item interface{}, itemType int, foreignIdAllow
 		}
 
 		itemStruct.ID = uuidTemp.String()
-	} else if !library.ItemExists(itemStruct.ID, itemType) && !foreignIdAllowd {
-		return os.ErrNotExist
 	}
+        if library.ItemExists(itemStruct.ID, itemType) {
+                return os.ErrExist
+        } else if !foreignIdAllowd {
+                return os.ErrNotExist
+        }
 
 	// Check for name field presence/duplicates
 	if itemStruct.Name == "" {
